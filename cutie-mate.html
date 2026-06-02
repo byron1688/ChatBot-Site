@@ -432,6 +432,19 @@ code {
   font-size: 14px;
 }
 .video-placeholder .icon { font-size: 32px; margin-bottom: 8px; }
+.audio-demo-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+}
+.audio-demo-card audio {
+  border-radius: 8px;
+}
+.audio-demo-card details summary {
+  cursor: pointer;
+  user-select: none;
+}
 .video-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
@@ -1226,33 +1239,76 @@ last_3.append(chunk)
   </div>
 
   <h3>Voice &amp; TTS Demos</h3>
+  <p>Each audio sample below was generated entirely on-device using the corresponding TTS engine. Click play to hear the differences in naturalness, prosody, and character.</p>
+
   <div class="video-grid">
-    <div>
-      <div class="video-placeholder" style="aspect-ratio:16/9;">
-        <div class="icon">&#127908;</div>
-        <p>Voice demo: ChatTTS (Chinese)<br><em>Natural conversational prosody</em></p>
-      </div>
+    <div class="audio-demo-card">
+      <div style="font-weight:600;margin-bottom:4px;">Orpheus English &mdash; Casual Companion</div>
+      <div style="font-size:13px;color:var(--text-3);margin-bottom:8px;">LLM-based TTS with emotion tags (&lt;laugh&gt;, &lt;sigh&gt;). Real-time SSE streaming via SNAC codec.</div>
+      <audio controls preload="metadata" style="width:100%;">
+        <source src="audio/05_orpheus_en_partner.wav" type="audio/wav">
+      </audio>
+      <details style="margin-top:6px;font-size:12px;color:var(--text-3);">
+        <summary>Transcript</summary>
+        <p style="margin-top:4px;">Hey, how was your day? &lt;laugh&gt; I was going to text you earlier, but then I got distracted making coffee and somehow ended up cleaning the kitchen&hellip; Anyway, if you're free later, we could watch something light, or just sit around and talk for a bit.</p>
+      </details>
     </div>
-    <div>
-      <div class="video-placeholder" style="aspect-ratio:16/9;">
-        <div class="icon">&#127908;</div>
-        <p>Voice demo: Kokoro (English)<br><em>Near-human naturalness</em></p>
-      </div>
+    <div class="audio-demo-card">
+      <div style="font-weight:600;margin-bottom:4px;">Orpheus Chinese &mdash; Bilingual Companion</div>
+      <div style="font-size:13px;color:var(--text-3);margin-bottom:8px;">Fine-tuned Chinese Orpheus model. Auto-routed when CJK ratio &gt; 30% via the bilingual detection pipeline.</div>
+      <audio controls preload="metadata" style="width:100%;">
+        <source src="audio/06_orpheus_zh_partner.wav" type="audio/wav">
+      </audio>
+      <details style="margin-top:6px;font-size:12px;color:var(--text-3);">
+        <summary>Transcript</summary>
+        <p style="margin-top:4px;">哎，晚上吃什么呀？我刚才突然想起来，上次我们去吃的那家牛肉面其实还不错，汤挺香的&hellip;你要是懒得出门，我们也可以点外卖。不过说真的，最近吃外卖吃得我有点腻了，还是出去走走比较舒服。</p>
+      </details>
     </div>
-    <div>
-      <div class="video-placeholder" style="aspect-ratio:16/9;">
-        <div class="icon">&#127908;</div>
-        <p>Voice demo: Orpheus Streaming<br><em>Real-time SSE audio with emotion</em></p>
-      </div>
+    <div class="audio-demo-card">
+      <div style="font-weight:600;margin-bottom:4px;">ChatTTS Chinese &mdash; Conversational</div>
+      <div style="font-size:13px;color:var(--text-3);margin-bottom:8px;">Zero-shot Chinese TTS with natural prosody and breathing patterns. Lightweight, runs alongside chat models.</div>
+      <audio controls preload="metadata" style="width:100%;">
+        <source src="audio/03_chattts_zh_friendly.wav" type="audio/wav">
+      </audio>
+      <details style="margin-top:6px;font-size:12px;color:var(--text-3);">
+        <summary>Transcript</summary>
+        <p style="margin-top:4px;">哎，你昨天睡得怎么样？我本来想早点睡的，结果刷手机刷到很晚。早上起来的时候真的有点后悔。不过今天阳光还挺好的，等会儿出去买杯咖啡吧。</p>
+      </details>
     </div>
-    <div>
-      <div class="video-placeholder" style="aspect-ratio:16/9;">
-        <div class="icon">&#127908;</div>
-        <p>Voice demo: Trump RVC Cloning<br><em>TTS + voice conversion pipeline</em></p>
-      </div>
+    <div class="audio-demo-card">
+      <div style="font-weight:600;margin-bottom:4px;">Kokoro English &mdash; Playful Roast</div>
+      <div style="font-size:13px;color:var(--text-3);margin-bottom:8px;">Near-human naturalness with expressive phrasing. Used for the &ldquo;Nasty&rdquo; personality skill.</div>
+      <audio controls preload="metadata" style="width:100%;">
+        <source src="audio/04_kokoro_en_nasty_roast.wav" type="audio/wav">
+      </audio>
+      <details style="margin-top:6px;font-size:12px;color:var(--text-3);">
+        <summary>Transcript</summary>
+        <p style="margin-top:4px;">Bro, you walked in here like you're the main character of a meme compilation&hellip; But I respect it. That's not laziness, that's a lifestyle brand with zero investors and maximum confidence.</p>
+      </details>
+    </div>
+    <div class="audio-demo-card">
+      <div style="font-weight:600;margin-bottom:4px;">Trump Parody &mdash; RVC Voice Cloning Pipeline</div>
+      <div style="font-size:13px;color:var(--text-3);margin-bottom:8px;">TTS &rarr; RVC voice conversion pipeline. Demonstrates the modular architecture: any TTS engine can feed into any RVC model.</div>
+      <audio controls preload="metadata" style="width:100%;">
+        <source src="audio/10_trump_en_parody.wav" type="audio/wav">
+      </audio>
+      <details style="margin-top:6px;font-size:12px;color:var(--text-3);">
+        <summary>Transcript</summary>
+        <p style="margin-top:4px;">Look, the morning coffee was tremendous. Really tremendous. I took one sip, very powerful sip, and suddenly the whole day started winning&hellip; A lot of people are saying this was the greatest breakfast productivity comeback they've ever seen.</p>
+      </details>
+    </div>
+    <div class="audio-demo-card">
+      <div style="font-weight:600;margin-bottom:4px;">Kiddo &mdash; Playful Everyday Chat</div>
+      <div style="font-size:13px;color:var(--text-3);margin-bottom:8px;">Edge TTS + post-processing pipeline. Lightweight fallback engine with character-appropriate voice selection.</div>
+      <audio controls preload="metadata" style="width:100%;">
+        <source src="audio/09_kiddo_en_playful.mp3" type="audio/mpeg">
+      </audio>
+      <details style="margin-top:6px;font-size:12px;color:var(--text-3);">
+        <summary>Transcript</summary>
+        <p style="margin-top:4px;">Hey hey, guess what. I found one tiny cookie left in the kitchen, and I am choosing to believe it was waiting for me. Also, I was going to clean my desk, but then I found an old sticker, and now the desk is somehow messier. That's called progress.</p>
+      </details>
     </div>
   </div>
-  <p style="color:var(--text-3);font-size:13px;text-align:center;margin-top:8px;">Video and audio demos will be embedded here once recorded. Placeholders show planned content.</p>
 </section>
 
 </div>
