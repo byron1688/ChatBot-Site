@@ -420,47 +420,6 @@ code {
   color: var(--text-2);
 }
 
-/* ── Audio Demo Card ── */
-.audio-demo-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 16px;
-  margin: 24px 0;
-}
-.audio-demo-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 16px;
-  box-shadow: var(--shadow);
-}
-.audio-demo-card h4 {
-  font-size: 15px;
-  font-weight: 600;
-  margin-bottom: 12px;
-  color: var(--text);
-}
-.audio-demo-card audio {
-  width: 100%;
-  border-radius: 8px;
-  margin: 8px 0;
-  height: 32px;
-}
-.audio-demo-card .engine-label {
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  margin-bottom: 8px;
-  color: var(--accent);
-}
-.audio-demo-card p {
-  font-size: 13px;
-  color: var(--text-3);
-  margin-top: 8px;
-  margin-bottom: 0;
-}
-
 /* ── Video embed ── */
 .video-placeholder {
   background: var(--surface);
@@ -473,6 +432,19 @@ code {
   font-size: 14px;
 }
 .video-placeholder .icon { font-size: 32px; margin-bottom: 8px; }
+.audio-demo-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+}
+.audio-demo-card audio {
+  border-radius: 8px;
+}
+.audio-demo-card details summary {
+  cursor: pointer;
+  user-select: none;
+}
 .video-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
@@ -517,7 +489,6 @@ footer a {
 @media (max-width: 640px) {
   section { padding: 48px 0; }
   .cards { grid-template-columns: 1fr; }
-  .audio-demo-grid { grid-template-columns: 1fr; }
   .compare-table { font-size: 12px; }
   .compare-table td, .compare-table th { padding: 8px 10px; }
   .arch-diagram { padding: 16px; }
@@ -533,7 +504,7 @@ footer a {
 </head>
 <body>
 
-<!-- ════════════════════════════════════════════════════════════════ HERO ════ -->
+<!-- ════════════════════════════════════════════════════════════════ HERO -->
 <div class="hero">
   <div class="hero-badge"><span class="dot"></span> Personal Project &mdash; May 2026</div>
   <h1>Building a <span class="gradient">Multi-Agent AI Companion</span> on Apple Silicon</h1>
@@ -546,7 +517,7 @@ footer a {
   </div>
 </div>
 
-<!-- ════════════════════════════════════════════════════════════════ TOC ════ -->
+<!-- ════════════════════════════════════════════════════════════════ TOC -->
 <nav class="toc" id="toc">
   <div class="toc-inner">
     <a href="#architecture">System Architecture</a>
@@ -554,7 +525,8 @@ footer a {
     <a href="#tts">Real-Time TTS</a>
     <a href="#stt">Voice Input</a>
     <a href="#image">Image Generation</a>
-    <a href="#demo">Audio Demo</a>
+    <a href="#stack">Tech Stack</a>
+    <a href="#demo">Demo</a>
   </div>
 </nav>
 
@@ -564,111 +536,806 @@ footer a {
 <section id="architecture">
   <div class="section-label"><span class="num">1</span> System Architecture</div>
   <h2>Multi-Agent Routing &amp; RAG on 32 GB</h2>
-  <p>The core challenge: run multiple LLMs simultaneously for different tasks (routing, generation, memory extraction, TTS) within 32 GB of unified memory. Every model choice is a tradeoff between quality, latency, and memory footprint.</p>
+  <p>The core challenge: run multiple LLMs simultaneously for different tasks (routing, generation, memory extraction, TTS) within 32 GB of unified memory. Every model choice is a tradeoff between quality, latency, and VRAM pressure.</p>
+
+  <h3>The Routing Pipeline</h3>
+  <p>Each user message passes through a 3-layer classification cascade before hitting the generation model. The goal: route fast, cheap messages to tiny models and reserve the 8B for complex tasks.</p>
+
+  <div class="pipeline">
+    <div class="pipeline-step">
+      <span class="step-num">1</span>
+      <div class="step-body">
+        <div class="step-title">Semantic Router (nomic-embed-text, 768d)</div>
+        <div class="step-desc">Embeds user input and computes cosine similarity against ~130 pre-embedded example utterances across 5 intent categories. Cache built on first startup, loads in ~300ms on subsequent boots. Confidence threshold: 0.38.</div>
+      </div>
+    </div>
+    <div class="pipeline-step">
+      <span class="step-num">2</span>
+      <div class="step-body">
+        <div class="step-title">LLM Classifier (Qwen 3.5 0.8B, ~50ms)</div>
+        <div class="step-desc">If semantic confidence is below threshold, a tiny 0.8B model classifies intent with temperature=0.0 and num_predict=10. Combined with keyword boosting to catch under-classification.</div>
+      </div>
+    </div>
+    <div class="pipeline-step">
+      <span class="step-num">3</span>
+      <div class="step-body">
+        <div class="step-title">Keyword Fallback (zero-latency)</div>
+        <div class="step-desc">Regex + keyword matching as the ultimate safety net when Ollama is unavailable. Covers ~85% of common intents with hand-tuned bilingual (Chinese + English) keyword lists.</div>
+      </div>
+    </div>
+    <div class="pipeline-step">
+      <span class="step-num">4</span>
+      <div class="step-body">
+        <div class="step-title">Turn Understanding (structured JSON extraction)</div>
+        <div class="step-desc">Extracts task_type, user_goal, entities, missing_info, needs_web, needs_stronger_model, avatar_action, and avatar_mood into a typed JSON state. This drives the entire downstream graph.</div>
+      </div>
+    </div>
+    <div class="pipeline-step">
+      <span class="step-num">5</span>
+      <div class="step-body">
+        <div class="step-title">LangGraph-Inspired ChatGraph Dispatch</div>
+        <div class="step-desc">A hand-rolled state graph inspired by LangGraph's explicit-state, conditional-routing, trace-logging pattern &mdash; implemented without the LangChain dependency overhead. Routes to the optimal model with response validation and duplicate detection with auto-repair.</div>
+      </div>
+    </div>
+  </div>
+
+  <h3>Model Allocation Strategy</h3>
+  <p>With 32 GB unified memory shared between macOS, the GPU, and all running processes, I can't keep every model loaded. The <code>keep_alive</code> parameter in Ollama is the key lever:</p>
+
+  <table class="compare-table">
+    <thead>
+      <tr>
+        <th>Model</th>
+        <th>Size</th>
+        <th>Role</th>
+        <th>Latency</th>
+        <th>Keep Alive</th>
+        <th>Why This Model</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="model-name">Qwen 3.5 0.8B</td>
+        <td>~0.5 GB</td>
+        <td>Router / Classifier</td>
+        <td>~50ms</td>
+        <td>5 min</td>
+        <td>Fast enough for inline classification, small enough to stay loaded alongside bigger models</td>
+      </tr>
+      <tr>
+        <td class="model-name">Qwen 3 8B</td>
+        <td>~5 GB</td>
+        <td>Quality Generation</td>
+        <td>2&ndash;3s</td>
+        <td>5 min</td>
+        <td>Best quality-per-GB for bilingual (ZH/EN). Strong instruction following, good at structured JSON extraction</td>
+      </tr>
+      <tr>
+        <td class="model-name">Tifa-Roleplay 14B Q4</td>
+        <td>~8 GB</td>
+        <td>Character / Roleplay</td>
+        <td>3&ndash;5s</td>
+        <td>30s</td>
+        <td>Specialized fine-tune for character consistency. Short keep_alive to free memory when not in character mode</td>
+      </tr>
+      <tr>
+        <td class="model-name">nomic-embed-text</td>
+        <td>~274 MB</td>
+        <td>Embedding (RAG + Router)</td>
+        <td>~15ms</td>
+        <td>5 min</td>
+        <td>768-dim, strong multilingual. Powers both semantic search and intent routing</td>
+      </tr>
+      <tr>
+        <td class="model-name">DeepSeek V4 Flash</td>
+        <td>Cloud</td>
+        <td>Knowledge / Analysis</td>
+        <td>2&ndash;4s</td>
+        <td>N/A</td>
+        <td>Opt-in cloud fallback for complex analysis, web-grounded research, and knowledge-intensive tasks</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout insight">
+    <span class="icon">&#128161;</span>
+    <div><strong>Key tradeoff:</strong> The 14B character model can't coexist with the 8B quality model in memory &mdash; loading one evicts the other. I use a 30-second keep_alive on the 14B to aggressively reclaim memory when the user switches modes. The 0.8B router stays resident permanently (only 500 MB).</div>
+  </div>
+
+  <h3>RAG Memory System</h3>
+  <p>Long-term memory uses <strong>pgvector</strong> for cosine similarity search over embedded conversation summaries:</p>
+
+  <div class="flow-row">
+    <span class="flow-box input">Session Ends</span>
+    <span class="flow-arrow">&rarr;</span>
+    <span class="flow-box process">LLM Extract (Qwen 8B)</span>
+    <span class="flow-arrow">&rarr;</span>
+    <span class="flow-box model">Embed (nomic-embed-text)</span>
+    <span class="flow-arrow">&rarr;</span>
+    <span class="flow-box output">INSERT pgvector</span>
+  </div>
+  <div class="flow-row">
+    <span class="flow-box input">New Message</span>
+    <span class="flow-arrow">&rarr;</span>
+    <span class="flow-box model">Embed Query</span>
+    <span class="flow-arrow">&rarr;</span>
+    <span class="flow-box process">Cosine Search (top-5)</span>
+    <span class="flow-arrow">&rarr;</span>
+    <span class="flow-box output">Inject into System Prompt</span>
+  </div>
+
+  <p>A dual-layer cleanup system (rule-based + normalized dedup) prevents low-quality memories from polluting retrieval. Importantly, <strong>RAG cleanup is a manual user-triggered action</strong> via a dashboard button &mdash; rather than running automatically on every request. This is deliberate: on a memory-constrained M1 Max, running cleanup (which scans all rows, normalizes text, and deduplicates) on every session-end would add latency and memory pressure. The user clicks "RAG Cleanup" when they choose, keeping the critical chat path fast.</p>
+
+  <div class="callout success">
+    <span class="icon">&#9989;</span>
+    <div><strong>Graceful degradation:</strong> If PostgreSQL or Ollama is unavailable, the system automatically falls back to in-memory recency-based search. The app never crashes &mdash; it just loses semantic precision.</div>
+  </div>
+
+  <h3>Sliding Window Context &amp; Session Compression</h3>
+  <p>Small local models have limited context windows. Without management, after ~14 turns the model starts losing track of earlier conversation topics. My solution uses a <strong>sliding window with progressive summarization</strong>:</p>
+  <ul style="color:var(--text-2);margin:12px 0 12px 20px;">
+    <li>After 14 messages, a compressor node summarizes older turns into a running <code>session["summary"]</code></li>
+    <li>Only the 6 most recent messages are kept verbatim &mdash; the summary carries forward everything else</li>
+    <li>The summary preserves <strong>entities</strong> (people, companies, topics) and <strong>open questions</strong> so the model can resolve follow-up references ("it", "those two", "the company mentioned earlier")</li>
+    <li>This keeps the effective context focused for the small 8B model while maintaining <strong>conversational coherence</strong> across an entire session</li>
+  </ul>
+  <p>The key insight: rather than blindly truncating old messages (which breaks multi-turn reasoning), progressive summarization gives the model a compressed but semantically complete view of the full conversation history.</p>
+
+  <h3>Anti-Repetition &amp; Response Quality Control</h3>
+  <p>Character-mode LLMs love to repeat themselves &mdash; generating the same compliments, same actions, same ending questions. I built a multi-layer defense:</p>
+  <ol style="color:var(--text-2);margin:12px 0 12px 20px;">
+    <li><strong>Jaccard n-gram similarity</strong> &mdash; After generation, the response is compared against the previous assistant turn using 4-gram character sets. If Jaccard similarity exceeds the threshold (0.38 normally, 0.22 if the user explicitly asked for "something different"), the model is re-prompted with explicit instructions to change imagery, actions, and sentence structure</li>
+    <li><strong>Substring containment check</strong> &mdash; Catches cases where the model copies entire clauses verbatim even if the overall n-gram score is below threshold</li>
+    <li><strong>Rule validator</strong> &mdash; Detects repetitive phrases within a single response (clause-level dedup), vague responses to decision/comparison tasks, and empty outputs</li>
+    <li><strong>LLM validator</strong> (Qwen 8B) &mdash; Scores response relevance, context usage, and goal alignment via structured JSON verdict. Failed responses are auto-repaired by re-prompting with the validator's specific feedback</li>
+  </ol>
+
+  <h3>10 Character Skills</h3>
+  <p>Each skill defines bilingual system prompts (ZH/EN), optional TTS voice overrides, and RVC voice cloning models. Skills are hot-swappable mid-conversation via a skill detector that uses keyword pre-filtering + LLM confirmation:</p>
+
+  <div class="cards">
+    <div class="card">
+      <div class="label accent">Default</div>
+      <h4>Friendly / Cool / Cute</h4>
+      <p>Warm friend, effortless cool, or kawaii &mdash; each with distinct prompt engineering for tone consistency</p>
+    </div>
+    <div class="card">
+      <div class="label amber">Character</div>
+      <h4>Trump / Kiddo / Roast</h4>
+      <p>Trump impersonation with RVC voice cloning, 5-year-old child mode, stand-up comedian roast energy</p>
+    </div>
+    <div class="card">
+      <div class="label purple">Companion</div>
+      <h4>Partner</h4>
+      <p>Romantic companion with emotion tags for TTS (&lt;laugh&gt;, &lt;sigh&gt;, &lt;gasp&gt;). Streaming audio via Orpheus with sentence-level segmentation</p>
+    </div>
+    <div class="card">
+      <div class="label cyan">Knowledge Expert</div>
+      <h4>Web-Grounded Research</h4>
+      <p>Real-time knowledge retrieval via Tavily/Firecrawl search APIs. Built-in analysis mode with DuckDuckGo + Wikipedia + RSS fallback chain for grounded, cited responses</p>
+    </div>
+  </div>
 </section>
 
 <!-- ═══════════════════════════════ SECTION 2: Animation ═══════════════ -->
 <section id="animation">
   <div class="section-label"><span class="num">2</span> 3D Avatar &amp; Animation</div>
   <h2>LLM-Driven Interactive VRM Avatar</h2>
-  <p>Having taken a Video Game Design and Computer Graphics course where I worked with Unity and animation pipelines, I wanted to bring the chat companion to life with a real-time 3D avatar whose behavior responds to conversation content.</p>
+  <p>Having taken a Video Game Design and Computer Graphics course where I worked with Unity and animation pipelines, I wanted to bring the chat companion to life with a real-time 3D avatar whose behavior is <strong>driven by LLM output</strong> &mdash; not scripted.</p>
+
+  <h3>Tech Stack</h3>
+  <div class="tags">
+    <span class="tag">Three.js r161</span>
+    <span class="tag">@pixiv/three-vrm 2.0</span>
+    <span class="tag">@pixiv/three-vrm-animation 3.5</span>
+    <span class="tag">Mixamo FBX</span>
+    <span class="tag">VRM 1.0 Format</span>
+    <span class="tag">Web Audio API</span>
+  </div>
+
+  <h3>LLM-Driven Animation Selection</h3>
+  <p>The key innovation: <strong>the LLM decides which animation to play, not the frontend.</strong> During the Turn Understanding phase, the model outputs structured fields for <code>avatar_action</code> and <code>avatar_mood</code>. These flow through the ChatGraph and arrive at the frontend as metadata alongside the text response:</p>
+
+  <div class="flow-row">
+    <span class="flow-box input">User: "Can you dance?"</span>
+    <span class="flow-arrow">&rarr;</span>
+    <span class="flow-box process">Turn Understanding</span>
+    <span class="flow-arrow">&rarr;</span>
+    <span class="flow-box model">avatar_action: "dance"</span>
+    <span class="flow-arrow">&rarr;</span>
+    <span class="flow-box output">Play Swing Dancing.fbx</span>
+  </div>
+  <div class="flow-row">
+    <span class="flow-box input">User: "I feel sad today"</span>
+    <span class="flow-arrow">&rarr;</span>
+    <span class="flow-box process">Turn Understanding</span>
+    <span class="flow-arrow">&rarr;</span>
+    <span class="flow-box model">avatar_mood: "sad"</span>
+    <span class="flow-arrow">&rarr;</span>
+    <span class="flow-box output">Consoling pose + response</span>
+  </div>
+
+  <p>This means the avatar reacts semantically to conversation content &mdash; it dances when asked, looks sad when the user is upset, waves on greeting &mdash; all without hardcoded triggers.</p>
+
+  <h3>Avatar State Machine</h3>
+  <p>The avatar responds to <strong>4 conversation states</strong> (idle, listening, thinking, speaking) and <strong>5 mood states</strong> (neutral, happy, sad, angry, thankful). Each state maps to both an animation clip and a visual effect (glow color, pulse speed).</p>
+
+  <p><strong>Supported actions:</strong> dance, wave, salute, point, thankful, excited, sad, angry &mdash; each mapped to a Mixamo FBX clip that's retargeted to the VRM skeleton at runtime. Skill-specific animation pools (e.g., character-specific dance styles) override the defaults based on the active persona.</p>
+
+  <h3>Lip Sync via Web Audio API</h3>
+  <p>Real-time lip sync is driven by audio analysis, not phoneme mapping. When TTS audio plays: <code>MediaElementSource</code> &rarr; <code>AnalyserNode</code> (FFT 256, smoothing 0.82) &rarr; RMS volume mapped to VRM blend shapes (<code>aa</code>, <code>oh</code>, <code>ee</code>) with smooth interpolation each animation frame.</p>
+
+  <div class="callout insight">
+    <span class="icon">&#127912;</span>
+    <div><strong>From Unity to Three.js:</strong> My background in Unity gave me the vocabulary (blend trees, animation controllers, IK rigs). The web approach trades some control for zero-install deployment. VRM's standardized blend shape spec (<code>happy</code>, <code>sad</code>, <code>angry</code>) maps directly to the LLM's mood classification output &mdash; a clean bridge between NLP and real-time graphics.<br><br><strong>Future improvement:</strong> Expand the animation library with more diverse clips per mood/action, and explore procedural animation blending so the avatar can mix multiple emotions in a single response.</div>
+  </div>
 </section>
 
 <!-- ═══════════════════════════════ SECTION 3: TTS ═════════════════════ -->
 <section id="tts">
   <div class="section-label"><span class="num">3</span> Real-Time TTS Pipeline</div>
   <h2>Multi-Engine Voice Synthesis on Constrained Hardware</h2>
-  <p>The TTS system supports 5 engines (including bilingual Orpheus variants) with automatic language-based routing and per-skill voice customization. A significant engineering effort went into making streaming audio work smoothly on M1 Max.</p>
+  <p>The TTS system supports 5 engines (including bilingual Orpheus variants) with automatic language-based routing and per-skill voice customization. A significant engineering effort went into making real-time streaming audio work within the memory and compute constraints of M1 Max.</p>
+
+  <h3>Engine Comparison</h3>
+  <table class="compare-table">
+    <thead>
+      <tr>
+        <th>Engine</th>
+        <th>Size</th>
+        <th>Chinese</th>
+        <th>English</th>
+        <th>Emotion</th>
+        <th>Latency</th>
+        <th>Verdict</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="model-name">ChatTTS</td>
+        <td>~800 MB</td>
+        <td class="check">&#10003; Best</td>
+        <td class="cross">&#10007; Weak</td>
+        <td class="check">&#10003; Excellent</td>
+        <td>~1.5s</td>
+        <td>Default Chinese voice. Natural prosody, filler words, laughter control via oral/laugh/break params</td>
+      </tr>
+      <tr>
+        <td class="model-name">Kokoro</td>
+        <td>82 MB</td>
+        <td class="check">&#10003; Good</td>
+        <td class="check">&#10003; Best</td>
+        <td class="cross">&#10007; Limited</td>
+        <td>~0.8s</td>
+        <td>Primary English voice. 82M params but near-human naturalness. 12 voice presets per language</td>
+      </tr>
+      <tr>
+        <td class="model-name">Orpheus 3B (EN)</td>
+        <td>~3 GB</td>
+        <td class="cross">&#10007; N/A</td>
+        <td class="check">&#10003; Great</td>
+        <td class="star">&#9733; Best</td>
+        <td>~3&ndash;8s</td>
+        <td>LLM-based TTS via LM Studio. Understands emotion tags (&lt;laugh&gt;, &lt;sigh&gt;). Used for real-time streaming audio</td>
+      </tr>
+      <tr>
+        <td class="model-name">Orpheus 3B (ZH)</td>
+        <td>~3 GB</td>
+        <td class="check">&#10003; Great</td>
+        <td class="cross">&#10007; N/A</td>
+        <td class="star">&#9733; Best</td>
+        <td>~3&ndash;8s</td>
+        <td>Chinese fine-tuned Orpheus. Auto-switched based on language detection (zh_chars &gt; 30% threshold). Same SNAC streaming pipeline</td>
+      </tr>
+      <tr>
+        <td class="model-name">Edge TTS</td>
+        <td>Cloud</td>
+        <td class="check">&#10003; Good</td>
+        <td class="check">&#10003; Good</td>
+        <td class="cross">&#10007; None</td>
+        <td>~0.5s</td>
+        <td>Microsoft neural voices. Free cloud fallback when local models are unavailable</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Streaming Orpheus: Token Budget &amp; Buffer Optimization</h3>
+  <p>The most challenging part was making Orpheus work in real-time streaming. Orpheus is an LLM that generates audio as <code>&lt;custom_token_N&gt;</code> tokens decoded by the SNAC codec. Here's the optimization work:</p>
+
+  <h4 style="font-size:16px;margin:24px 0 8px;">Bilingual Model Switching</h4>
+  <p>The system runs two separate Orpheus models &mdash; an English base model and a <strong>Chinese fine-tuned variant</strong> (<code>orpheus-3b-chinese-ft</code>). Language detection happens inline: if more than 30% of characters are CJK, it routes to the Chinese model. This happens transparently &mdash; the same streaming pipeline, same SNAC decoder, same SSE endpoint.</p>
+
+  <h4 style="font-size:16px;margin:24px 0 8px;">Token Budget Estimation</h4>
+  <p>Orpheus tokens don't map 1:1 to text characters. Through empirical testing across ~50 utterances, I derived the formula:</p>
+  <div class="code-block"><span class="comment">// Token budget: Chinese chars need ~35 tokens each, English chars ~12</span>
+max_tokens = max(600, min(1200, zh_chars * 35 + (len(text) - zh_chars) * 12))</div>
+  <p>Too few tokens = audio cuts off mid-sentence. Too many = wasted compute and potential repetition loops. The formula was calibrated by generating ~50 test utterances and measuring token consumption per character in both languages.</p>
+
+  <h4 style="font-size:16px;margin:24px 0 8px;">SNAC Decode Buffer Strategy</h4>
+  <p>SNAC uses a hierarchical 3-codebook structure: every <strong>7 tokens</strong> form one audio frame. The streaming pipeline must accumulate tokens before decoding:</p>
+  <div class="code-block"><span class="comment">// Only decode after accumulating enough frames (28 tokens = 4 frames)</span>
+<span class="keyword">if</span> count % 7 == 0 <span class="keyword">and</span> count > 27:
+    chunk = _convert_tokens_to_audio(buffer[-28:])  <span class="comment">// 4-frame lookback window</span></div>
+  <p><strong>Why 28-token lookback?</strong> SNAC's decoder produces better quality when given multi-frame context rather than single frames. Testing showed 4-frame windows (28 tokens) balanced latency vs. quality &mdash; decoding each frame individually produced audible artifacts at boundaries, while 8+ frames added too much latency before the first audio chunk played.</p>
+
+  <h4 style="font-size:16px;margin:24px 0 8px;">Repetition Detection in Audio Stream</h4>
+  <p>LLM-based TTS models sometimes enter repetition loops, generating the same audio pattern indefinitely. I implemented a 3-chunk ring buffer detector:</p>
+  <div class="code-block"><span class="comment">// If last 3 audio chunks are identical bytes, the model is looping</span>
+last_3.append(chunk)
+<span class="keyword">if</span> len(last_3) > 3: last_3.pop(0)
+<span class="keyword">if</span> len(last_3) == 3 <span class="keyword">and</span> last_3[0] == last_3[1] == last_3[2]:
+    <span class="keyword">break</span>  <span class="comment">// early exit, save compute</span></div>
+
+  <h4 style="font-size:16px;margin:24px 0 8px;">SSE Streaming Architecture</h4>
+  <div class="flow-row">
+    <span class="flow-box input">LLM Text</span>
+    <span class="flow-arrow">&rarr;</span>
+    <span class="flow-box process">LM Studio Stream</span>
+    <span class="flow-arrow">&rarr;</span>
+    <span class="flow-box model">SNAC Decode</span>
+    <span class="flow-arrow">&rarr;</span>
+    <span class="flow-box output">SSE audio chunks</span>
+    <span class="flow-arrow">&rarr;</span>
+    <span class="flow-box output">Browser PCM</span>
+  </div>
+  <p>The streaming endpoint sends three event types: <code>event:meta</code> (text + metadata), <code>event:audio</code> (base64 PCM chunks, ~85ms each at 24kHz), and <code>event:done</code>. The producer runs in a thread pool to avoid blocking the async event loop.</p>
+
+  <h3>Sentence Segmentation for Quality</h3>
+  <p>Long text degrades TTS quality significantly. My 5-pass segmenter splits text into optimal 15&ndash;80 character segments:</p>
+  <ol style="color:var(--text-2);margin:12px 0 12px 20px;">
+    <li>Split on sentence endings (periods, exclamation marks, question marks, ellipsis)</li>
+    <li>If only 1 segment and &gt;60 chars, split on commas and semicolons</li>
+    <li>Merge short fragments (&lt;15 chars) into neighbors &mdash; prevents choppy audio</li>
+    <li>Re-split any segment &gt;80 chars on comma boundaries</li>
+    <li>Merge trailing orphan (&lt;12 chars) back into previous &mdash; avoids isolated particles</li>
+  </ol>
+
+  <div class="callout warning">
+    <span class="icon">&#9888;&#65039;</span>
+    <div><strong>Hardware constraint insight:</strong> On M1 Max, the Orpheus 3B model (running via LM Studio) shares GPU memory with the chat LLMs (via Ollama) and Draw Things. I can't run all three simultaneously at full speed. The <code>keep_alive=30s</code> strategy for the 14B roleplay model is especially critical here &mdash; freeing 8 GB of VRAM before Orpheus starts streaming reduces time-to-first-audio by ~40%.</div>
+  </div>
 </section>
 
 <!-- ═══════════════════════════════ SECTION 4: STT ═══════════════════ -->
 <section id="stt">
   <div class="section-label"><span class="num">4</span> Voice Input &amp; Speech-to-Text</div>
   <h2>Local Whisper-Based STT</h2>
-  <p>Voice input uses <strong>faster-whisper</strong> running locally on CPU with INT8 quantization for bilingual Chinese/English transcription.</p>
+  <p>Voice input uses <strong>faster-whisper</strong> running locally on CPU with INT8 quantization:</p>
+
+  <table class="compare-table">
+    <thead>
+      <tr>
+        <th>Model</th>
+        <th>Size</th>
+        <th>Latency (M1)</th>
+        <th>Chinese Accuracy</th>
+        <th>Notes</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="model-name">tiny</td>
+        <td>39 MB</td>
+        <td>~0.3s</td>
+        <td class="cross">&#10007; Too many errors</td>
+        <td>Homophone confusion renders Chinese unusable</td>
+      </tr>
+      <tr>
+        <td class="model-name">base <span class="star">&#9733;</span></td>
+        <td>74 MB</td>
+        <td>~0.5s</td>
+        <td class="check">&#10003; Good</td>
+        <td>Default. Sweet spot for casual bilingual use</td>
+      </tr>
+      <tr>
+        <td class="model-name">small</td>
+        <td>244 MB</td>
+        <td>~1s</td>
+        <td class="check">&#10003; Much better</td>
+        <td>Recommended for production Chinese</td>
+      </tr>
+      <tr>
+        <td class="model-name">medium</td>
+        <td>769 MB</td>
+        <td>~2.5s</td>
+        <td class="check">&#10003; Near-perfect</td>
+        <td>Best if latency is acceptable</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p>Key optimizations for Chinese accuracy:</p>
+  <ul style="color:var(--text-2);margin:12px 0 12px 20px;">
+    <li><strong>Initial prompt injection</strong> &mdash; A Chinese conversational prompt steers Whisper away from misreading common words as literary terms or place names</li>
+    <li><strong>Two-pass detection</strong> &mdash; First pass detects language (beam_size=1, fast), second pass transcribes with language-specific prompt (beam_size=5, best_of=5)</li>
+    <li><strong>VAD filtering</strong> &mdash; min_silence_duration=300ms to avoid splitting mid-word</li>
+    <li><strong>condition_on_previous_text=False</strong> &mdash; Prevents hallucination loops where Whisper repeats itself</li>
+  </ul>
 </section>
 
 <!-- ═══════════════════════════════ SECTION 5: Image Generation ════════ -->
 <section id="image">
   <div class="section-label"><span class="num">5</span> Image Generation</div>
   <h2>Stable Diffusion via Draw Things</h2>
-  <p>Image generation runs through Draw Things on macOS, providing an SD WebUI-compatible HTTP API for local Stable Diffusion inference.</p>
+  <p>Image generation runs through <strong>Draw Things</strong> on macOS, which provides an SD WebUI-compatible HTTP API at localhost:7860. I built a full-featured web UI and tested three different SDXL models extensively.</p>
+
+  <h3>Model Comparison</h3>
+  <table class="compare-table">
+    <thead>
+      <tr>
+        <th>Model</th>
+        <th>Steps</th>
+        <th>CFG</th>
+        <th>Sampler</th>
+        <th>Time (M1 Max)</th>
+        <th>Best For</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="model-name">RealVisXL V5.0</td>
+        <td>30</td>
+        <td>4.5</td>
+        <td>DPM++ 2M Karras</td>
+        <td>~45s</td>
+        <td>Photorealistic portraits, landscapes. Best overall quality with realistic lighting</td>
+      </tr>
+      <tr>
+        <td class="model-name">PonyDiffusion V6 XL</td>
+        <td>35</td>
+        <td>7.0</td>
+        <td>Euler A</td>
+        <td>~55s</td>
+        <td>Anime/illustration style. Requires score_9 quality tags, clip_skip=2. Largest LoRA ecosystem</td>
+      </tr>
+      <tr>
+        <td class="model-name">Z Image Turbo 1.0</td>
+        <td>8</td>
+        <td>1.5</td>
+        <td>Euler A Trailing</td>
+        <td>~15s</td>
+        <td>Speed-optimized. 4x faster than RealVisXL. Uses zero_negative_prompt. Good for rapid iteration</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout insight">
+    <span class="icon">&#128161;</span>
+    <div><strong>Draw Things constraint:</strong> Only one model is loaded at a time &mdash; there's no API for model switching. Width and height must be multiples of 64 and must match the init_image dimensions for img2img. I learned this through extensive trial and error (non-64 dimensions crash the app).</div>
+  </div>
+
+  <h3>Parameter Deep-Dive</h3>
+  <ul style="color:var(--text-2);margin:12px 0 12px 20px;">
+    <li><strong>CFG Scale (Guidance)</strong> &mdash; How closely the model follows the prompt. Low (1.5 for Z Image) = creative freedom, medium (4.5 for RealVis) = balanced, high (7.0 for Pony) = strict prompt adherence</li>
+    <li><strong>Steps</strong> &mdash; More steps = more detail but diminishing returns past ~30. Z Image Turbo is specifically trained to converge at 8 steps</li>
+    <li><strong>Sampler</strong> &mdash; DPM++ 2M Karras gives the most consistent photorealistic results. Euler A is faster but noisier. Euler A Trailing is optimized for turbo models</li>
+    <li><strong>clip_skip</strong> &mdash; PonyDiffusion requires clip_skip=2 (skipping the last CLIP layer) because it was trained that way. Using clip_skip=1 produces washed-out images</li>
+    <li><strong>Negative Prompt</strong> &mdash; Z Image Turbo uses <code>zero_negative_prompt=true</code> &mdash; its training explicitly teaches the model what not to generate without needing a negative prompt</li>
+  </ul>
+
+  <h3>Understanding LoRA</h3>
+  <p><strong>LoRA (Low-Rank Adaptation)</strong> allows fine-tuning a model's behavior without retraining the full network. Instead of modifying all ~3.5B parameters, LoRA decomposes weight updates into low-rank matrices (typically rank 4&ndash;128), reducing trainable parameters by 99%. A 10&ndash;200 MB adapter file replaces a full model retrain.</p>
+
+  <h3>Features Built</h3>
+  <div class="cards">
+    <div class="card">
+      <div class="label cyan">UI</div>
+      <h4>3 Model Presets</h4>
+      <p>One-click switching with auto-populated optimal params. Model descriptions explain each preset's strengths</p>
+    </div>
+    <div class="card">
+      <div class="label green">Gallery</div>
+      <h4>Persistent Image Library</h4>
+      <p>All generated images auto-saved with JSON metadata. Grid view, lightbox, delete, pagination</p>
+    </div>
+    <div class="card">
+      <div class="label purple">Modes</div>
+      <h4>txt2img + img2img</h4>
+      <p>Text-to-image and image-to-image with drag-drop upload. Auto dimension matching to 64-multiples</p>
+    </div>
+    <div class="card">
+      <div class="label amber">UX</div>
+      <h4>Generation Animation</h4>
+      <p>3-ring spinner with real-time timer. Visual feedback during the 15-55 second generation window</p>
+    </div>
+  </div>
+
+  <div class="callout warning">
+    <span class="icon">&#9888;&#65039;</span>
+    <div><strong>GPU contention:</strong> On M1 Max, the GPU is shared between all processes. Running any GPU-intensive application alongside Draw Things can 3&ndash;4x generation time. The 10-core GPU handles one workload well but degrades rapidly under contention.</div>
+  </div>
 </section>
 
-<!-- ═══════════════════════════════ SECTION 6: Audio Demo ═════════════════ -->
-<section id="demo">
-  <div class="section-label"><span class="num">6</span> Audio Demo</div>
-  <h2>TTS Audio Samples</h2>
-  <p>Here are sample audio outputs from different TTS engines and voice personas used in the system:</p>
+<!-- ═══════════════════════════════ SECTION 6: Tech Stack ══════════════ -->
+<section id="stack">
+  <div class="section-label"><span class="num">6</span> Tech Stack &amp; Architecture</div>
+  <h2>Full System Overview</h2>
 
-  <div class="audio-demo-grid">
-    <div class="audio-demo-card">
-      <div class="engine-label">ChatTTS • Chinese</div>
-      <h4>Friendly Voice</h4>
-      <audio controls>
-        <source src="audio/03_chattts_zh_friendly.wav" type="audio/wav">
-        Your browser does not support the audio element.
-      </audio>
-      <p>Natural prosody with conversational warmth and friendly tone.</p>
+  <div class="arch-diagram">
+    <svg viewBox="0 0 800 480" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <pattern id="grid2" width="20" height="20" patternUnits="userSpaceOnUse">
+          <path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(0,0,0,0.03)" stroke-width="0.5"/>
+        </pattern>
+      </defs>
+      <rect width="800" height="480" fill="url(#grid2)"/>
+
+      <!-- Frontend -->
+      <text x="20" y="25" fill="#4f46e5" class="diagram-label">FRONTEND (Browser)</text>
+      <rect x="20" y="35" width="150" height="40" rx="6" fill="#eef2ff" stroke="rgba(79,70,229,0.25)" stroke-width="1"/>
+      <text x="95" y="60" text-anchor="middle" fill="#4a4a68" class="diagram-sublabel">Control Panel (HTML/JS)</text>
+
+      <rect x="185" y="35" width="150" height="40" rx="6" fill="#eef2ff" stroke="rgba(79,70,229,0.25)" stroke-width="1"/>
+      <text x="260" y="60" text-anchor="middle" fill="#4a4a68" class="diagram-sublabel">3D Avatar (Three.js/VRM)</text>
+
+      <rect x="350" y="35" width="150" height="40" rx="6" fill="#eef2ff" stroke="rgba(79,70,229,0.25)" stroke-width="1"/>
+      <text x="425" y="60" text-anchor="middle" fill="#4a4a68" class="diagram-sublabel">Draw Things UI</text>
+
+      <rect x="515" y="35" width="130" height="40" rx="6" fill="#eef2ff" stroke="rgba(79,70,229,0.25)" stroke-width="1"/>
+      <text x="580" y="60" text-anchor="middle" fill="#4a4a68" class="diagram-sublabel">SSE Audio Player</text>
+
+      <!-- Backend -->
+      <text x="20" y="110" fill="#0891b2" class="diagram-label">BACKEND (FastAPI + Uvicorn)</text>
+      <rect x="20" y="120" width="760" height="140" rx="10" fill="#f0fdfa" stroke="rgba(8,145,178,0.15)" stroke-width="1"/>
+
+      <rect x="40" y="135" width="105" height="35" rx="5" fill="#ecfeff" stroke="rgba(8,145,178,0.2)" stroke-width="1"/>
+      <text x="92" y="157" text-anchor="middle" fill="#4a4a68" class="diagram-sublabel">Chat Router</text>
+
+      <rect x="160" y="135" width="105" height="35" rx="5" fill="#ecfeff" stroke="rgba(8,145,178,0.2)" stroke-width="1"/>
+      <text x="212" y="157" text-anchor="middle" fill="#4a4a68" class="diagram-sublabel">ChatGraph</text>
+
+      <rect x="280" y="135" width="105" height="35" rx="5" fill="#ecfeff" stroke="rgba(8,145,178,0.2)" stroke-width="1"/>
+      <text x="332" y="157" text-anchor="middle" fill="#4a4a68" class="diagram-sublabel">TTS Pipeline</text>
+
+      <rect x="400" y="135" width="95" height="35" rx="5" fill="#ecfeff" stroke="rgba(8,145,178,0.2)" stroke-width="1"/>
+      <text x="447" y="157" text-anchor="middle" fill="#4a4a68" class="diagram-sublabel">Memory/RAG</text>
+
+      <rect x="510" y="135" width="105" height="35" rx="5" fill="#ecfeff" stroke="rgba(8,145,178,0.2)" stroke-width="1"/>
+      <text x="562" y="157" text-anchor="middle" fill="#4a4a68" class="diagram-sublabel">Session Mgmt</text>
+
+      <rect x="630" y="135" width="130" height="35" rx="5" fill="#ecfeff" stroke="rgba(8,145,178,0.2)" stroke-width="1"/>
+      <text x="695" y="157" text-anchor="middle" fill="#4a4a68" class="diagram-sublabel">Draw Things Proxy</text>
+
+      <rect x="40" y="185" width="120" height="35" rx="5" fill="#ecfeff" stroke="rgba(8,145,178,0.15)" stroke-width="1"/>
+      <text x="100" y="207" text-anchor="middle" fill="#4a4a68" class="diagram-sublabel">Semantic Router</text>
+
+      <rect x="175" y="185" width="120" height="35" rx="5" fill="#ecfeff" stroke="rgba(8,145,178,0.15)" stroke-width="1"/>
+      <text x="235" y="207" text-anchor="middle" fill="#4a4a68" class="diagram-sublabel">Skill Detector</text>
+
+      <rect x="310" y="185" width="120" height="35" rx="5" fill="#ecfeff" stroke="rgba(8,145,178,0.15)" stroke-width="1"/>
+      <text x="370" y="207" text-anchor="middle" fill="#4a4a68" class="diagram-sublabel">Tool Planner</text>
+
+      <rect x="445" y="185" width="135" height="35" rx="5" fill="#ecfeff" stroke="rgba(8,145,178,0.15)" stroke-width="1"/>
+      <text x="512" y="207" text-anchor="middle" fill="#4a4a68" class="diagram-sublabel">Response Validator</text>
+
+      <rect x="595" y="185" width="120" height="35" rx="5" fill="#ecfeff" stroke="rgba(8,145,178,0.15)" stroke-width="1"/>
+      <text x="655" y="207" text-anchor="middle" fill="#4a4a68" class="diagram-sublabel">Web Search</text>
+
+      <rect x="40" y="230" width="130" height="20" rx="4" fill="#f0fdfa" stroke="rgba(8,145,178,0.1)" stroke-width="1"/>
+      <text x="105" y="244" text-anchor="middle" fill="#7a7a96" style="font-size:8.5px" class="diagram-sublabel">Turn Understanding</text>
+
+      <rect x="185" y="230" width="130" height="20" rx="4" fill="#f0fdfa" stroke="rgba(8,145,178,0.1)" stroke-width="1"/>
+      <text x="250" y="244" text-anchor="middle" fill="#7a7a96" style="font-size:8.5px" class="diagram-sublabel">Context Manager</text>
+
+      <rect x="330" y="230" width="130" height="20" rx="4" fill="#f0fdfa" stroke="rgba(8,145,178,0.1)" stroke-width="1"/>
+      <text x="395" y="244" text-anchor="middle" fill="#7a7a96" style="font-size:8.5px" class="diagram-sublabel">Session Compressor</text>
+
+      <!-- Local Models -->
+      <text x="20" y="290" fill="#7c3aed" class="diagram-label">LOCAL MODELS (Ollama + LM Studio)</text>
+      <rect x="20" y="300" width="120" height="45" rx="6" fill="#f5f3ff" stroke="rgba(124,58,237,0.2)" stroke-width="1"/>
+      <text x="80" y="318" text-anchor="middle" fill="#7c3aed" class="diagram-sublabel">Qwen 3.5 0.8B</text>
+      <text x="80" y="333" text-anchor="middle" fill="#7a7a96" style="font-size:8px">Router / Classify</text>
+
+      <rect x="155" y="300" width="120" height="45" rx="6" fill="#f5f3ff" stroke="rgba(124,58,237,0.2)" stroke-width="1"/>
+      <text x="215" y="318" text-anchor="middle" fill="#7c3aed" class="diagram-sublabel">Qwen 3 8B</text>
+      <text x="215" y="333" text-anchor="middle" fill="#7a7a96" style="font-size:8px">Quality Gen</text>
+
+      <rect x="290" y="300" width="120" height="45" rx="6" fill="#f5f3ff" stroke="rgba(124,58,237,0.2)" stroke-width="1"/>
+      <text x="350" y="318" text-anchor="middle" fill="#7c3aed" class="diagram-sublabel">Tifa-RP 14B Q4</text>
+      <text x="350" y="333" text-anchor="middle" fill="#7a7a96" style="font-size:8px">Character</text>
+
+      <rect x="425" y="300" width="120" height="45" rx="6" fill="#f5f3ff" stroke="rgba(124,58,237,0.2)" stroke-width="1"/>
+      <text x="485" y="318" text-anchor="middle" fill="#7c3aed" class="diagram-sublabel">nomic-embed-text</text>
+      <text x="485" y="333" text-anchor="middle" fill="#7a7a96" style="font-size:8px">768d Embedding</text>
+
+      <rect x="560" y="300" width="120" height="45" rx="6" fill="#f5f3ff" stroke="rgba(124,58,237,0.2)" stroke-width="1"/>
+      <text x="620" y="318" text-anchor="middle" fill="#7c3aed" class="diagram-sublabel">Orpheus 3B</text>
+      <text x="620" y="333" text-anchor="middle" fill="#7a7a96" style="font-size:8px">Emotive TTS</text>
+
+      <!-- External -->
+      <text x="20" y="380" fill="#059669" class="diagram-label">DATA &amp; EXTERNAL</text>
+
+      <rect x="20" y="390" width="130" height="45" rx="6" fill="#ecfdf5" stroke="rgba(5,150,105,0.2)" stroke-width="1"/>
+      <text x="85" y="408" text-anchor="middle" fill="#059669" class="diagram-sublabel">PostgreSQL + pgvector</text>
+      <text x="85" y="423" text-anchor="middle" fill="#7a7a96" style="font-size:8px">Memory Store</text>
+
+      <rect x="165" y="390" width="130" height="45" rx="6" fill="#ecfdf5" stroke="rgba(5,150,105,0.2)" stroke-width="1"/>
+      <text x="230" y="408" text-anchor="middle" fill="#059669" class="diagram-sublabel">Draw Things (7860)</text>
+      <text x="230" y="423" text-anchor="middle" fill="#7a7a96" style="font-size:8px">Image Generation</text>
+
+      <rect x="310" y="390" width="130" height="45" rx="6" fill="#ecfdf5" stroke="rgba(5,150,105,0.2)" stroke-width="1"/>
+      <text x="375" y="408" text-anchor="middle" fill="#059669" class="diagram-sublabel">RVC / Applio (8001)</text>
+      <text x="375" y="423" text-anchor="middle" fill="#7a7a96" style="font-size:8px">Voice Cloning</text>
+
+      <rect x="455" y="390" width="130" height="45" rx="6" fill="#fffbeb" stroke="rgba(217,119,6,0.2)" stroke-width="1"/>
+      <text x="520" y="408" text-anchor="middle" fill="#d97706" class="diagram-sublabel">DeepSeek API</text>
+      <text x="520" y="423" text-anchor="middle" fill="#7a7a96" style="font-size:8px">Cloud Fallback (opt-in)</text>
+
+      <rect x="600" y="390" width="130" height="45" rx="6" fill="#fffbeb" stroke="rgba(217,119,6,0.2)" stroke-width="1"/>
+      <text x="665" y="408" text-anchor="middle" fill="#d97706" class="diagram-sublabel">Tavily / Firecrawl</text>
+      <text x="665" y="423" text-anchor="middle" fill="#7a7a96" style="font-size:8px">Web Search API</text>
+
+      <!-- STT -->
+      <text x="20" y="438" fill="#e11d48" class="diagram-label">SPEECH</text>
+      <rect x="20" y="445" width="160" height="30" rx="6" fill="#fff1f2" stroke="rgba(225,29,72,0.2)" stroke-width="1"/>
+      <text x="100" y="465" text-anchor="middle" fill="#e11d48" class="diagram-sublabel">faster-whisper (STT, CPU INT8)</text>
+
+      <rect x="195" y="445" width="120" height="30" rx="6" fill="#fff1f2" stroke="rgba(225,29,72,0.2)" stroke-width="1"/>
+      <text x="255" y="465" text-anchor="middle" fill="#e11d48" class="diagram-sublabel">ChatTTS (800M)</text>
+
+      <rect x="330" y="445" width="120" height="30" rx="6" fill="#fff1f2" stroke="rgba(225,29,72,0.2)" stroke-width="1"/>
+      <text x="390" y="465" text-anchor="middle" fill="#e11d48" class="diagram-sublabel">Kokoro (82M)</text>
+
+      <rect x="465" y="445" width="120" height="30" rx="6" fill="#fff1f2" stroke="rgba(225,29,72,0.2)" stroke-width="1"/>
+      <text x="525" y="465" text-anchor="middle" fill="#e11d48" class="diagram-sublabel">Edge TTS (Cloud)</text>
+    </svg>
+  </div>
+
+  <h3>Key Technologies</h3>
+  <div class="cards">
+    <div class="card">
+      <div class="label accent">Backend</div>
+      <h4>Python / FastAPI</h4>
+      <p>Async endpoints with Uvicorn. SSE streaming. CORS for browser access. 6 routers: chat, control, memory, session, stt, drawthings</p>
     </div>
-
-    <div class="audio-demo-card">
-      <div class="engine-label">Kokoro • English</div>
-      <h4>Nasty Roast</h4>
-      <audio controls>
-        <source src="audio/04_kokoro_en_nasty_roast.wav" type="audio/wav">
-        Your browser does not support the audio element.
-      </audio>
-      <p>Stand-up comedian energy with roasting personality.</p>
+    <div class="card">
+      <div class="label purple">LLM Inference</div>
+      <h4>Ollama + LM Studio</h4>
+      <p>Ollama for chat models (keep_alive control). LM Studio for Orpheus TTS (streaming completions API)</p>
     </div>
-
-    <div class="audio-demo-card">
-      <div class="engine-label">Orpheus • English</div>
-      <h4>Partner Mode (Emotional)</h4>
-      <audio controls>
-        <source src="audio/05_orpheus_en_partner.wav" type="audio/wav">
-        Your browser does not support the audio element.
-      </audio>
-      <p>LLM-based TTS with emotion tags and romantic companion tone.</p>
+    <div class="card">
+      <div class="label cyan">Database</div>
+      <h4>PostgreSQL + pgvector</h4>
+      <p>IVFFlat index (50 lists) for ANN cosine search. 768-dim nomic vectors. In-memory fallback</p>
     </div>
-
-    <div class="audio-demo-card">
-      <div class="engine-label">Orpheus • Chinese</div>
-      <h4>Partner Mode (Emotional)</h4>
-      <audio controls>
-        <source src="audio/06_orpheus_zh_partner.wav" type="audio/wav">
-        Your browser does not support the audio element.
-      </audio>
-      <p>Chinese fine-tuned Orpheus with emotional expression and warmth.</p>
+    <div class="card">
+      <div class="label green">3D Rendering</div>
+      <h4>Three.js + VRM</h4>
+      <p>Pixiv's VRM SDK for humanoid avatars. Mixamo FBX retargeting. Web Audio API lip sync</p>
     </div>
-
-    <div class="audio-demo-card">
-      <div class="engine-label">Character • English</div>
-      <h4>Kiddo Playful Mode</h4>
-      <audio controls>
-        <source src="audio/09_kiddo_en_playful.wav" type="audio/wav">
-        Your browser does not support the audio element.
-      </audio>
-      <p>5-year-old child voice with playful and innocent energy.</p>
+    <div class="card">
+      <div class="label amber">Voice</div>
+      <h4>4 TTS + 1 STT Engine</h4>
+      <p>ChatTTS, Kokoro, Orpheus, Edge TTS. faster-whisper STT. RVC voice cloning post-processing</p>
     </div>
+    <div class="card">
+      <div class="label rose">Image</div>
+      <h4>Draw Things + SDXL</h4>
+      <p>3 model presets (RealVis, Pony, Z-Turbo). txt2img + img2img. Persistent gallery with metadata</p>
+    </div>
+  </div>
 
-    <div class="audio-demo-card">
-      <div class="engine-label">Character • English</div>
-      <h4>Trump Parody</h4>
-      <audio controls>
-        <source src="audio/10_trump_en_parody.wav" type="audio/wav">
-        Your browser does not support the audio element.
-      </audio>
-      <p>Parody voice using RVC voice cloning for entertainment.</p>
+  <h3>What I Learned</h3>
+  <div class="callout success">
+    <span class="icon">&#127891;</span>
+    <div>
+      <p style="margin-bottom:8px;"><strong>Memory is the constraint, not compute.</strong> On M1 Max, the 10-core GPU is plenty fast for inference. But 32 GB unified memory is shared between macOS, the display server, all Ollama models, Draw Things, LM Studio, PostgreSQL, and the Python runtime. I spent more time tuning <code>keep_alive</code> timers and model loading/unloading than optimizing any individual model.</p>
+      <p style="margin-bottom:8px;"><strong>Graceful degradation beats perfect reliability.</strong> Every external dependency (Ollama, PostgreSQL, RVC server, LM Studio) can be down. Each service has a fallback chain: pgvector &rarr; in-memory search, Orpheus &rarr; Kokoro &rarr; Edge TTS &rarr; macOS <code>say</code>, DeepSeek &rarr; local 8B, Tavily &rarr; DuckDuckGo &rarr; Wikipedia.</p>
+      <p style="margin-bottom:0;"><strong>Agentic systems are routing systems.</strong> The "intelligence" isn't in any single model &mdash; it's in the classification cascade, the context management, and the response validation loop. A 0.8B model doing intent classification correctly matters more than upgrading the generation model from 8B to 70B.</p>
     </div>
   </div>
 </section>
+
+<!-- ═══════════════════════════════ SECTION 7: Demo ════════════════════ -->
+<section id="demo">
+  <div class="section-label"><span class="num">7</span> Demo</div>
+  <h2>Live Demonstrations</h2>
+  <p>Video walkthroughs of the system in action. These demos show the full pipeline from user input through LLM routing, avatar animation, TTS synthesis, and image generation.</p>
+
+  <h3>System Walkthrough</h3>
+  <div class="video-placeholder">
+    <div class="icon">&#127909;</div>
+    <p>YouTube video embed &mdash; coming soon<br><em>Full system demo: chat, avatar reactions, skill switching, voice mode</em></p>
+  </div>
+
+  <h3>Voice &amp; TTS Demos</h3>
+  <p>Each audio sample below was generated entirely on-device using the corresponding TTS engine. Click play to hear the differences in naturalness, prosody, and character.</p>
+
+  <div class="video-grid">
+    <div class="audio-demo-card">
+      <div style="font-weight:600;margin-bottom:4px;">Orpheus English &mdash; Casual Companion</div>
+      <div style="font-size:13px;color:var(--text-3);margin-bottom:8px;">LLM-based TTS with emotion tags (&lt;laugh&gt;, &lt;sigh&gt;). Real-time SSE streaming via SNAC codec.</div>
+      <audio controls preload="metadata" style="width:100%;">
+        <source src="audio/05_orpheus_en_partner.wav" type="audio/wav">
+      </audio>
+      <details style="margin-top:6px;font-size:12px;color:var(--text-3);">
+        <summary>Transcript</summary>
+        <p style="margin-top:4px;">Hey, how was your day? &lt;laugh&gt; I was going to text you earlier, but then I got distracted making coffee and somehow ended up cleaning the kitchen&hellip; Anyway, if you're free later, we could watch something light, or just sit around and talk for a bit.</p>
+      </details>
+    </div>
+    <div class="audio-demo-card">
+      <div style="font-weight:600;margin-bottom:4px;">Orpheus Chinese &mdash; Bilingual Companion</div>
+      <div style="font-size:13px;color:var(--text-3);margin-bottom:8px;">Fine-tuned Chinese Orpheus model. Auto-routed when CJK ratio &gt; 30% via the bilingual detection pipeline.</div>
+      <audio controls preload="metadata" style="width:100%;">
+        <source src="audio/06_orpheus_zh_partner.wav" type="audio/wav">
+      </audio>
+      <details style="margin-top:6px;font-size:12px;color:var(--text-3);">
+        <summary>Transcript</summary>
+        <p style="margin-top:4px;">哎，晚上吃什么呀？我刚才突然想起来，上次我们去吃的那家牛肉面其实还不错，汤挺香的&hellip;你要是懒得出门，我们也可以点外卖。不过说真的，最近吃外卖吃得我有点腻了，还是出去走走比较舒服。</p>
+      </details>
+    </div>
+    <div class="audio-demo-card">
+      <div style="font-weight:600;margin-bottom:4px;">ChatTTS Chinese &mdash; Conversational</div>
+      <div style="font-size:13px;color:var(--text-3);margin-bottom:8px;">Zero-shot Chinese TTS with natural prosody and breathing patterns. Lightweight, runs alongside chat models.</div>
+      <audio controls preload="metadata" style="width:100%;">
+        <source src="audio/03_chattts_zh_friendly.wav" type="audio/wav">
+      </audio>
+      <details style="margin-top:6px;font-size:12px;color:var(--text-3);">
+        <summary>Transcript</summary>
+        <p style="margin-top:4px;">哎，你昨天睡得怎么样？我本来想早点睡的，结果刷手机刷到很晚。早上起来的时候真的有点后悔。不过今天阳光还挺好的，等会儿出去买杯咖啡吧。</p>
+      </details>
+    </div>
+    <div class="audio-demo-card">
+      <div style="font-weight:600;margin-bottom:4px;">Kokoro English &mdash; Playful Roast</div>
+      <div style="font-size:13px;color:var(--text-3);margin-bottom:8px;">Near-human naturalness with expressive phrasing. Used for the &ldquo;Nasty&rdquo; personality skill.</div>
+      <audio controls preload="metadata" style="width:100%;">
+        <source src="audio/04_kokoro_en_nasty_roast.wav" type="audio/wav">
+      </audio>
+      <details style="margin-top:6px;font-size:12px;color:var(--text-3);">
+        <summary>Transcript</summary>
+        <p style="margin-top:4px;">Bro, you walked in here like you're the main character of a meme compilation&hellip; But I respect it. That's not laziness, that's a lifestyle brand with zero investors and maximum confidence.</p>
+      </details>
+    </div>
+    <div class="audio-demo-card">
+      <div style="font-weight:600;margin-bottom:4px;">Trump Parody &mdash; RVC Voice Cloning Pipeline</div>
+      <div style="font-size:13px;color:var(--text-3);margin-bottom:8px;">TTS &rarr; RVC voice conversion pipeline. Demonstrates the modular architecture: any TTS engine can feed into any RVC model.</div>
+      <audio controls preload="metadata" style="width:100%;">
+        <source src="audio/10_trump_en_parody.wav" type="audio/wav">
+      </audio>
+      <details style="margin-top:6px;font-size:12px;color:var(--text-3);">
+        <summary>Transcript</summary>
+        <p style="margin-top:4px;">Look, the morning coffee was tremendous. Really tremendous. I took one sip, very powerful sip, and suddenly the whole day started winning&hellip; A lot of people are saying this was the greatest breakfast productivity comeback they've ever seen.</p>
+      </details>
+    </div>
+    <div class="audio-demo-card">
+      <div style="font-weight:600;margin-bottom:4px;">Kiddo &mdash; Playful Everyday Chat</div>
+      <div style="font-size:13px;color:var(--text-3);margin-bottom:8px;">Edge TTS + post-processing pipeline. Lightweight fallback engine with character-appropriate voice selection.</div>
+      <audio controls preload="metadata" style="width:100%;">
+        <source src="audio/09_kiddo_en_playful.mp3" type="audio/mpeg">
+      </audio>
+      <details style="margin-top:6px;font-size:12px;color:var(--text-3);">
+        <summary>Transcript</summary>
+        <p style="margin-top:4px;">Hey hey, guess what. I found one tiny cookie left in the kitchen, and I am choosing to believe it was waiting for me. Also, I was going to clean my desk, but then I found an old sticker, and now the desk is somehow messier. That's called progress.</p>
+      </details>
+    </div>
+  </div>
+</section>
+
 </div>
 
-<!-- ════════════════════════════════════════════════════════════════ FOOTER ════ -->
+<!-- ════════════════════════════════════════════════════════════════ FOOTER -->
 <footer>
-  <p>Built with ❤️ by <a href="https://github.com/byron1688">Byron Chen</a></p>
+  <p style="margin-bottom:8px;">Built by <strong>Byron Chen</strong> &mdash; May 2026</p>
+  <p>
+    <a href="https://www.linkedin.com/in/xingpengchen/" target="_blank">LinkedIn</a>
+  </p>
 </footer>
+
+<!-- ── Sticky TOC highlight ── -->
+<script>
+const sections = document.querySelectorAll('section[id]');
+const tocLinks = document.querySelectorAll('.toc a');
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      const link = document.querySelector(`.toc a[href="#${entry.target.id}"]`);
+      if (link) link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-20% 0px -70% 0px' });
+sections.forEach(s => observer.observe(s));
+</script>
 
 </body>
 </html>
