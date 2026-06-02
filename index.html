@@ -421,12 +421,17 @@ code {
 }
 
 /* ── Audio Demo Card ── */
+.audio-demo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+  margin: 24px 0;
+}
 .audio-demo-card {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 16px;
-  margin: 16px 0;
   box-shadow: var(--shadow);
 }
 .audio-demo-card h4 {
@@ -439,11 +444,21 @@ code {
   width: 100%;
   border-radius: 8px;
   margin: 8px 0;
+  height: 32px;
+}
+.audio-demo-card .engine-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 8px;
+  color: var(--accent);
 }
 .audio-demo-card p {
   font-size: 13px;
   color: var(--text-3);
   margin-top: 8px;
+  margin-bottom: 0;
 }
 
 /* ── Video embed ── */
@@ -502,6 +517,7 @@ footer a {
 @media (max-width: 640px) {
   section { padding: 48px 0; }
   .cards { grid-template-columns: 1fr; }
+  .audio-demo-grid { grid-template-columns: 1fr; }
   .compare-table { font-size: 12px; }
   .compare-table td, .compare-table th { padding: 8px 10px; }
   .arch-diagram { padding: 16px; }
@@ -549,9 +565,6 @@ footer a {
   <div class="section-label"><span class="num">1</span> System Architecture</div>
   <h2>Multi-Agent Routing &amp; RAG on 32 GB</h2>
   <p>The core challenge: run multiple LLMs simultaneously for different tasks (routing, generation, memory extraction, TTS) within 32 GB of unified memory. Every model choice is a tradeoff between quality, latency, and memory footprint.</p>
-
-  <h3>The Routing Pipeline</h3>
-  <p>Each user message passes through a multi-layer classification cascade before hitting the generation model. The goal: route fast, cheap messages to tiny models and reserve the 8B for complex tasks.</p>
 </section>
 
 <!-- ═══════════════════════════════ SECTION 2: Animation ═══════════════ -->
@@ -586,15 +599,68 @@ footer a {
 <section id="demo">
   <div class="section-label"><span class="num">6</span> Audio Demo</div>
   <h2>TTS Audio Samples</h2>
-  <p>Here are sample audio outputs from the ChatTTS voice engine used in the system:</p>
+  <p>Here are sample audio outputs from different TTS engines and voice personas used in the system:</p>
 
-  <div class="audio-demo-card">
-    <h4>ChatTTS - Friendly Chinese Voice</h4>
-    <audio controls style="width: 100%;">
-      <source src="audio/03_chattts_zh_friendly.wav" type="audio/wav">
-      Your browser does not support the audio element.
-    </audio>
-    <p>ChatTTS with friendly tone, natural prosody and conversational style.</p>
+  <div class="audio-demo-grid">
+    <div class="audio-demo-card">
+      <div class="engine-label">ChatTTS • Chinese</div>
+      <h4>Friendly Voice</h4>
+      <audio controls>
+        <source src="audio/03_chattts_zh_friendly.wav" type="audio/wav">
+        Your browser does not support the audio element.
+      </audio>
+      <p>Natural prosody with conversational warmth and friendly tone.</p>
+    </div>
+
+    <div class="audio-demo-card">
+      <div class="engine-label">Kokoro • English</div>
+      <h4>Nasty Roast</h4>
+      <audio controls>
+        <source src="audio/04_kokoro_en_nasty_roast.wav" type="audio/wav">
+        Your browser does not support the audio element.
+      </audio>
+      <p>Stand-up comedian energy with roasting personality.</p>
+    </div>
+
+    <div class="audio-demo-card">
+      <div class="engine-label">Orpheus • English</div>
+      <h4>Partner Mode (Emotional)</h4>
+      <audio controls>
+        <source src="audio/05_orpheus_en_partner.wav" type="audio/wav">
+        Your browser does not support the audio element.
+      </audio>
+      <p>LLM-based TTS with emotion tags and romantic companion tone.</p>
+    </div>
+
+    <div class="audio-demo-card">
+      <div class="engine-label">Orpheus • Chinese</div>
+      <h4>Partner Mode (Emotional)</h4>
+      <audio controls>
+        <source src="audio/06_orpheus_zh_partner.wav" type="audio/wav">
+        Your browser does not support the audio element.
+      </audio>
+      <p>Chinese fine-tuned Orpheus with emotional expression and warmth.</p>
+    </div>
+
+    <div class="audio-demo-card">
+      <div class="engine-label">Character • English</div>
+      <h4>Kiddo Playful Mode</h4>
+      <audio controls>
+        <source src="audio/09_kiddo_en_playful.wav" type="audio/wav">
+        Your browser does not support the audio element.
+      </audio>
+      <p>5-year-old child voice with playful and innocent energy.</p>
+    </div>
+
+    <div class="audio-demo-card">
+      <div class="engine-label">Character • English</div>
+      <h4>Trump Parody</h4>
+      <audio controls>
+        <source src="audio/10_trump_en_parody.wav" type="audio/wav">
+        Your browser does not support the audio element.
+      </audio>
+      <p>Parody voice using RVC voice cloning for entertainment.</p>
+    </div>
   </div>
 </section>
 </div>
