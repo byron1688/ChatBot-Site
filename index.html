@@ -1040,6 +1040,13 @@ last_3.append(chunk)
     </div>
   </div>
 
+  <h3>Generated Sample &mdash; Z Image Turbo</h3>
+  <p>Below is a sample generated on-device using Z Image Turbo 1.0 at 8 steps (~15 seconds on M1 Max). The prompt combines photorealistic detail with ethereal fantasy elements:</p>
+  <div style="margin:20px 0;text-align:center;">
+    <img src="images/demo_example.png" alt="Z Image Turbo demo — ethereal Chinese woman with glowing silver hair, bioluminescent freckles, standing on a still black lake under a double moon sky" style="max-width:100%;border-radius:12px;border:1px solid var(--border);box-shadow:var(--shadow-lg);" loading="lazy">
+    <p style="font-size:12px;color:var(--text-3);margin-top:8px;font-style:italic;">Generated with Z Image Turbo 1.0 &bull; 8 steps &bull; CFG 1.5 &bull; Euler A Trailing &bull; ~15s on M1 Max</p>
+  </div>
+
   <div class="callout warning">
     <span class="icon">&#9888;&#65039;</span>
     <div><strong>GPU contention:</strong> On M1 Max, the GPU is shared between all processes. Running any GPU-intensive application alongside Draw Things can 3&ndash;4x generation time. The 10-core GPU handles one workload well but degrades rapidly under contention.</div>
@@ -1233,9 +1240,10 @@ last_3.append(chunk)
   <p>Video walkthroughs of the system in action. These demos show the full pipeline from user input through LLM routing, avatar animation, TTS synthesis, and image generation.</p>
 
   <h3>System Walkthrough</h3>
-  <div class="video-placeholder">
-    <div class="icon">&#127909;</div>
-    <p>YouTube video embed &mdash; coming soon<br><em>Full system demo: chat, avatar reactions, skill switching, voice mode</em></p>
+  <div class="video-grid">
+    <div class="video-slot" style="grid-column: 1 / -1; max-width: 720px; margin: 0 auto;">
+      <iframe src="https://www.youtube.com/embed/_jxbAMNE3KM" title="Cutie Mate AI Companion Demo" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+    </div>
   </div>
 
   <h3>Voice &amp; TTS Demos</h3>
@@ -1277,7 +1285,7 @@ last_3.append(chunk)
     </div>
     <div class="audio-demo-card">
       <div style="font-weight:600;margin-bottom:4px;">Kokoro English &mdash; Playful Roast</div>
-      <div style="font-size:13px;color:var(--text-3);margin-bottom:8px;">Near-human naturalness with expressive phrasing. Used for the &ldquo;Nasty&rdquo; personality skill.</div>
+      <div style="font-size:13px;color:var(--text-3);margin-bottom:8px;">Near-human naturalness with expressive phrasing. Used for the &ldquo;Brother&rdquo; personality skill.</div>
       <audio controls preload="metadata" style="width:100%;">
         <source src="audio/04_kokoro_en_nasty_roast.wav" type="audio/wav">
       </audio>
